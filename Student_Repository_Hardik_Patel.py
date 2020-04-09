@@ -1,8 +1,35 @@
-from typing import List,Dict,Tuple,DefaultDict
+from typing import List,Dict,Tuple,DefaultDict,Any
 from HW08_Hardik_Patel import file_reader
 from prettytable import PrettyTable
 from _collections import defaultdict
 import os
+
+"""Passing custom grades as global variable in form of dictionary"""
+general_grades:Dict={"A":4.0,"A-":3.75,"B+":3.25,"B":3.0,"B-":2.75,"C+":2.25,"C":2.0,"C-":0.0,"D+":0.0,"D":0.0,"D-":0.0,"F":0.0}
+
+
+class Major:
+    """This class is ude to give information regarding major.txt file"""
+    def __init__(self,major:str):
+        self._major:str=major
+        self._eleccourse:set=set()
+        self._reqcourse:set=set()
+
+    def all_courses(self,course:str,type:str):
+        """This function is use to seperate elective and required courses"""
+        if type=="R":
+            self._reqcourse.add(course)
+        elif type=="E":
+            self._eleccourse.add(course)
+        else:
+            print("Invalid Type")
+
+
+    def result_return_major(self):
+        """This function is use to return the data used in preety table of major summary"""
+        return [self._major,sorted(self._reqcourse),sorted(self._eleccourse)]
+
+
 
 class Student:
     """Contains information about every student"""
@@ -10,16 +37,32 @@ class Student:
         self._cwid:str=cwid
         self._name:str=name
         self._major:str=major
-        self._course:Dict[str,str]=dict()                #key=coursename and values=grade
+        self._course:Dict[str,str]=dict()               #key=coursename and values=grade
+        self._courseelective:List[str]=list()
+        self._courserequired:List[str]=list()
 
     def comp_courses(self,course:str,grade:str):
         """Use to get completed courses in form of list as keys for this assignment"""
-        self._course[course]:Dict[str, str]=grade
+        self._course[course]:Dict[str, int]=general_grades[grade]
+
+    def add_courses(self,course:Any):
+        """This function is use know which required and eletive courses is left for a particular student to complete"""
+        self._courserequired=list(set(course[1])-set(self._course.keys()))
+        if set(course[2]).intersection(set(self._course.keys())):
+            self._courseelective=[]
+        else:
+            self._courseelective=list(course[2])
+
 
     def result_return_student(self):
         """Use to return the final value of the class student
          and this value is used and printed in pretty table of student summary"""
-        return [self._cwid, self._name,sorted(self._course.keys())]
+        try:
+            gpa:float=(round(sum(self._course.values()) / len(self._course.values()), 2))
+        except:
+            gpa:float=0.0
+        #print([self._cwid, self._name,sorted(self._course.keys()),self._courserequired,self._courseelective,gpa])
+        return [self._cwid, self._name,sorted(self._course.keys()),sorted(self._courserequired),sorted(self._courseelective),gpa]
 
 class Instructor:
     """Contains every information about instructor"""
@@ -27,7 +70,7 @@ class Instructor:
         self._cwid:str=cwid
         self._name:str=name
         self._dept:str=dept
-        self._courses:DefaultDict[str,int]=defaultdict(int)         #key=coursename and values=count of students(int)
+        self._courses:DefaultDict[str,int]=defaultdict(int)
 
     def add_num_of_students(self,course:str):
         """This function is use to keep the count of number of students taken courses of a particular instructor"""
@@ -44,25 +87,30 @@ class Repository:
     """Contain every information"""
     def __init__(self,path:str):
         self._path:str=path
-        self._students:Dict[str,Student]=dict()                 #keys=cwid and values=Instance of Class Student
+        self._students:Dict[str,Student]=dict()                 #key=cwid and value=Instance of Class Student
         self._instructors:Dict[str,Instructor]=dict()           #keys=cwid and values=Instance of Class Instructor
+        self.mainmajor:Dict[str,Major]=dict()                   #keys=major and values=Instance of Class Major
         #path1:str=os.path.join(self._path, "students.txt")
         #self.path:str=os.path.join(self._path, "instructors.txt")
         #path1:str=os.path.join(self._path, "grades.txt")
         self.check_student_data()
         self.check_instructor_data()
         self.check_grades_data()
+        self.check_majors_data()
+        self.cal_required_elective_courses_forstudent()
         self.printpretty_1()
         self.printpretty_2()
+        self.printpretty_3()
 
     def check_student_data(self):
         """This function read the students.txt file and fill values in self._students"""
         path1:str=os.path.join(self._path, "students.txt")
         try:
-            open_file1=file_reader(path1,fields=3,sep="\t")
+            open_file1=file_reader(path1,fields=3,sep=";",header=True)
             for cwid,name,major in open_file1:
                 self._students[cwid]=Student(cwid,name,major)
         except ValueError as e:
+            #print("aa")
             print(e)
         except FileNotFoundError as fe:
             print(fe)
@@ -71,7 +119,7 @@ class Repository:
         """This function read the instructors.txt file and fill values in self._instructors"""
         path2:str=os.path.join(self._path,"instructors.txt")
         try:
-            open_file2=file_reader(path2,fields=3,sep="\t")
+            open_file2=file_reader(path2,fields=3,sep="|",header=True)
             for cwid,name,dept in open_file2:
                 self._instructors[cwid]=Instructor(cwid,name,dept)
         except ValueError as e:
@@ -83,10 +131,11 @@ class Repository:
         """This function read the grades.txt file and fill values in both self._students and self._instructors"""
         path3:str=os.path.join(self._path,"grades.txt")
         try:
-            open_file3=file_reader(path3,fields=4,sep="\t")
+            open_file3=file_reader(path3,fields=4,sep="|",header=True)
             for cwid_stud,course,grade,cwid_inst in open_file3:
                 if cwid_stud in self._students:
-                    self._students[cwid_stud].comp_courses(course,grade)
+                    if grade!="F":
+                        self._students[cwid_stud].comp_courses(course,grade)
                 else:
                     print("Invalid Student")
                 if cwid_inst in self._instructors:
@@ -98,38 +147,87 @@ class Repository:
         except FileNotFoundError as fe:
             print(fe)
 
+    def check_majors_data(self):
+        """This function reads the majors.txt file and is use to fill the value of self.mainmajor"""
+        path4:str=os.path.join(self._path,"majors.txt")
+        try:
+            open_file4=file_reader(path4,fields=3,sep="\t")
+            for major,type,course in open_file4:
+                self.mainmajor[major]=Major(major)
+            open_file4 = file_reader(path4, fields=3, sep="\t")
+            for major,type,course in open_file4:
+                self.mainmajor[major].all_courses(course,type)
+                #for cwid_stud,cor,grade,cwid_inst in open_file3:
+                #    self._students[cwid_stud].add_courses(course,type)
+            #print(self.mainmajor.keys())
+            #for i in self.mainmajor.values():
+            #   print(i.result_return_major())
+
+        except ValueError as e:
+            print(e)
+        except FileNotFoundError as fe:
+            print(fe)
+
+    def cal_required_elective_courses_forstudent(self):
+        """This function is use to calculate required and elective courses left for a particular student"""
+        path1:str=os.path.join(self._path, "students.txt")
+        try:
+            open_file1 = file_reader(path1, fields=3, sep=";",header=True)
+            for cwid,name,major in open_file1:
+                self._students[cwid].add_courses(self.mainmajor[major].result_return_major())
+
+        except ValueError as e:
+            print(e)
+        except FileNotFoundError as fe:
+            print(fe)
+
+
     def printpretty_1(self):
         """This function is use to print the prettytable of students summary"""
         print("Student Summary")
-        testvar_1:Dict=dict()
-        p1:PrettyTable=PrettyTable(field_names=["CWID","Name","Completed Courses"])
+        p1:PrettyTable=PrettyTable(field_names=["CWID","Name","Completed Courses","Remaining Required","Remaining Elective","GPA"])
         #print(self._students.values())
+        testfile_dict1:Dict = dict()            #key=cwid of Student and values=Name and Completed Courses data from Student Summary table
         for a in self._students.values():
-            testvar_1[a.result_return_student()[0]]=tuple(a.result_return_student()[1:])
-            #print(a.result_return_student())
+            testfile_dict1[a.result_return_student()[0]]=tuple(a.result_return_student()[1:])
             p1.add_row(a.result_return_student())
-
+        #print(testfile_dict1)
         print(p1)
-        return testvar_1
+        return testfile_dict1
+
+
 
     def printpretty_2(self):
-        """This function is use to print the pretty table of instructors summary"""
+        """This function is use to print the prettytable of instructor summary"""
         print("Instructor Summary")
-        testvar_2:Dict=dict()
         p2:PrettyTable=PrettyTable(field_names=["CWID","Name","Dept","Course","Students"])
+        testfile_2:Dict=dict()          #key=cwid of Instructor and values=Name, Dept, Course and student counts data from Instructor Summary table
         #print(self._instructors)
         for i in self._instructors.values():
             for j in i.result_return_instructor():
-                testvar_2[j[0]]=tuple(j[1:])
+                testfile_2[j[0]]=tuple(j[1:])
                 p2.add_row(j)
 
         print(p2)
-        return testvar_2
+        return testfile_2
+
+    def printpretty_3(self):
+        """This function is use to print the prettytable of major summary"""
+        print("Major Summary")
+        p3:PrettyTable=PrettyTable(field_names=["Major","Required Courses","Electives"])
+        testfile_3:Dict=dict()          #key=major and values=Required and elective courses data from Major Summary table
+        #print(self._mainmajor.values())
+        for i in self.mainmajor.values():
+            p3.add_row(i.result_return_major())
+            testfile_3[i.result_return_major()[0]]=tuple(i.result_return_major()[1:])
 
 
+        print(p3)
+        return testfile_3
 
 def main():
-    Repository(r"C:\Users\Hardik\Downloads\SSW 810\Assign 9")
+    Repository(r"C:\Users\Hardik\Downloads\SSW 810\Assign 10_1")
+
 
 if __name__ == '__main__':
     main()
