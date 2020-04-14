@@ -3,6 +3,10 @@ from HW08_Hardik_Patel import file_reader
 from prettytable import PrettyTable
 from _collections import defaultdict
 import os
+import sys
+import sqlite3
+
+DB_FILe:str="/Users/Hardik/Downloads/SSW 810/Assign 11/Student-Repository.db"
 
 """Passing custom grades as global variable in form of dictionary"""
 general_grades:Dict={"A":4.0,"A-":3.75,"B+":3.25,"B":3.0,"B-":2.75,"C+":2.25,"C":2.0,"C-":0.0,"D+":0.0,"D":0.0,"D-":0.0,"F":0.0}
@@ -23,6 +27,8 @@ class Major:
             self._eleccourse.add(course)
         else:
             print("Invalid Type")
+            sys.exit("Type is not valid ")
+
 
 
     def result_return_major(self):
@@ -90,6 +96,7 @@ class Repository:
         self._students:Dict[str,Student]=dict()                 #key=cwid and value=Instance of Class Student
         self._instructors:Dict[str,Instructor]=dict()           #keys=cwid and values=Instance of Class Instructor
         self.mainmajor:Dict[str,Major]=dict()                   #keys=major and values=Instance of Class Major
+        self.student_grade_variable=set()
         #path1:str=os.path.join(self._path, "students.txt")
         #self.path:str=os.path.join(self._path, "instructors.txt")
         #path1:str=os.path.join(self._path, "grades.txt")
@@ -98,15 +105,17 @@ class Repository:
         self.check_grades_data()
         self.check_majors_data()
         self.cal_required_elective_courses_forstudent()
+        self.student_grades_table_db(DB_FILe)
         self.printpretty_1()
         self.printpretty_2()
         self.printpretty_3()
+        self.printpretty_4()
 
     def check_student_data(self):
         """This function read the students.txt file and fill values in self._students"""
         path1:str=os.path.join(self._path, "students.txt")
         try:
-            open_file1=file_reader(path1,fields=3,sep=";",header=True)
+            open_file1=file_reader(path1,fields=3,sep="\t",header=True)
             for cwid,name,major in open_file1:
                 self._students[cwid]=Student(cwid,name,major)
         except ValueError as e:
@@ -119,7 +128,7 @@ class Repository:
         """This function read the instructors.txt file and fill values in self._instructors"""
         path2:str=os.path.join(self._path,"instructors.txt")
         try:
-            open_file2=file_reader(path2,fields=3,sep="|",header=True)
+            open_file2=file_reader(path2,fields=3,sep="\t",header=True)
             for cwid,name,dept in open_file2:
                 self._instructors[cwid]=Instructor(cwid,name,dept)
         except ValueError as e:
@@ -131,17 +140,19 @@ class Repository:
         """This function read the grades.txt file and fill values in both self._students and self._instructors"""
         path3:str=os.path.join(self._path,"grades.txt")
         try:
-            open_file3=file_reader(path3,fields=4,sep="|",header=True)
+            open_file3=file_reader(path3,fields=4,sep="\t",header=True)
             for cwid_stud,course,grade,cwid_inst in open_file3:
                 if cwid_stud in self._students:
                     if grade!="F":
                         self._students[cwid_stud].comp_courses(course,grade)
                 else:
                     print("Invalid Student")
+                    sys.exit("New Student CWID found in grades.txt")
                 if cwid_inst in self._instructors:
                     self._instructors[cwid_inst].add_num_of_students(course)
                 else:
                     print("Invalid Instructor")
+                    sys.exit("New Student CWID found in grades.txt")
         except ValueError as e:
             print(e)
         except FileNotFoundError as fe:
@@ -151,10 +162,10 @@ class Repository:
         """This function reads the majors.txt file and is use to fill the value of self.mainmajor"""
         path4:str=os.path.join(self._path,"majors.txt")
         try:
-            open_file4=file_reader(path4,fields=3,sep="\t")
+            open_file4=file_reader(path4,fields=3,sep="\t", header=True)
             for major,type,course in open_file4:
                 self.mainmajor[major]=Major(major)
-            open_file4 = file_reader(path4, fields=3, sep="\t")
+            open_file4 = file_reader(path4, fields=3, sep="\t", header=True)
             for major,type,course in open_file4:
                 self.mainmajor[major].all_courses(course,type)
                 #for cwid_stud,cor,grade,cwid_inst in open_file3:
@@ -172,7 +183,7 @@ class Repository:
         """This function is use to calculate required and elective courses left for a particular student"""
         path1:str=os.path.join(self._path, "students.txt")
         try:
-            open_file1 = file_reader(path1, fields=3, sep=";",header=True)
+            open_file1 = file_reader(path1, fields=3, sep="\t",header=True)
             for cwid,name,major in open_file1:
                 self._students[cwid].add_courses(self.mainmajor[major].result_return_major())
 
@@ -180,6 +191,22 @@ class Repository:
             print(e)
         except FileNotFoundError as fe:
             print(fe)
+
+    def student_grades_table_db(self,db_path):
+        db: sqlite3.Connection=sqlite3.connect(db_path)
+
+        query:str="""SElECT s.Name,s.CWID,g.Course,g.Grade,i.Name 
+                    from Students s join Grades g join Instructors i 
+                    on s.CWID=g.StudentCWID and g.InstructorCWID=i.CWID 
+                    ORDER BY s.Name ASC"""
+
+        for row in db.execute(query):
+            self.student_grade_variable.add(row)
+
+        db.close()
+
+        return (sorted(self.student_grade_variable))
+
 
 
     def printpretty_1(self):
@@ -221,12 +248,22 @@ class Repository:
             p3.add_row(i.result_return_major())
             testfile_3[i.result_return_major()[0]]=tuple(i.result_return_major()[1:])
 
-
         print(p3)
         return testfile_3
 
+
+    def printpretty_4(self):
+        """This function is use to print the pretty table of Student-Grades summary"""
+        print("Student Grade Summary")
+        p4:PrettyTable=PrettyTable(field_names=["Name","CWID","Course","Grade","Instructor"])
+        for Name,CWID,Course,Grade,Instructor in sorted(self.student_grade_variable):
+            p4.add_row([Name,CWID,Course,Grade,Instructor])
+
+
+        print(p4)
+
 def main():
-    Repository(r"C:\Users\Hardik\Downloads\SSW 810\Assign 10_1")
+    Repository(r"C:\Users\Hardik\Downloads\SSW 810\Assign 11")
 
 
 if __name__ == '__main__':
