@@ -122,7 +122,7 @@ class FileAnalyzer:
         #print(p1)
 
 
-#print(list(file_reader("abc.txt",3,sep="|", header=True)))
+#print(list(file_reader("students.txt",3,sep=";", header=True)))
 #file_analyzer:FileAnalyzer = FileAnalyzer(r"C:\Users\Hardik\Downloads\SSW 810\Assign 7")
 #file_analyzer.pretty_print()
 #print(file_analyzer.analyze_files())
