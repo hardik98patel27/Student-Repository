@@ -5,6 +5,7 @@ from _collections import defaultdict
 import os
 import sys
 import sqlite3
+from flask import Flask, render_template
 
 DB_FILe:str="/Users/Hardik/Downloads/SSW 810/Assign 11/Student-Repository.db"
 
@@ -262,8 +263,35 @@ class Repository:
 
         print(p4)
 
+
 def main():
     Repository(r"C:\Users\Hardik\Downloads\SSW 810\Assign 11")
+
+    """Student Repository Table on Web Page"""
+    app:Flask=Flask(__name__)
+
+    @app.route("/table")
+    def final_web_table() ->str:
+        query: str = """SElECT s.Name,s.CWID,g.Course,g.Grade,i.Name 
+                            from Students s join Grades g join Instructors i 
+                            on s.CWID=g.StudentCWID and g.InstructorCWID=i.CWID 
+                            ORDER BY s.Name ASC"""
+
+        db:sqlite3.Connection=sqlite3.connect(DB_FILe)
+
+        final_data:List[Dict[str,str]]=[{"Student":student,"CWID":cwid,"Course":course,"Grade":grade,"Instructor":instructor}
+                                        for student,cwid,course,grade,instructor in db.execute(query)]
+
+        db.close()
+
+        return render_template("Student_Repo_Webpage.html",
+                               title="Student-Grade Summary",
+                               table_name="Student Repository",
+                               table_info="Student, Course, Grade, and Instructor",
+                               final_data=final_data)
+
+    app.run(debug=True)
+
 
 
 if __name__ == '__main__':
